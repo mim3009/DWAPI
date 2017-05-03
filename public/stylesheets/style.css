@@ -1,0 +1,8 @@
+#productInfo {
+	display: flex;
+	flex-wrap: wrap;
+}
+
+.productContent {
+	margin: 5px;
+}
