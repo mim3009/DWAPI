@@ -1,82 +1,26 @@
 (function () {
-	loadBasket();
+	login();
 })();
 
-function addToCart() { 
-	var data = {
-		"pid" : $(this).closest(".productContent").attr("id"),
-		"qty" : $(this).siblings(".productsQty").val()
-	};
+var token = null;
+var basket_id = null;
+var ifmatch = null;
 
-	$.ajax({
-		type : "POST",
-		url : "/addItemToBasket",
-		data : data
-	}).done(function(data) {
-		var basketData = JSON.parse(data);
-		updateCart(basketData);
-	}).fail(function() {
-		alert("Fail to get Basket");
-	});
-}
-
-function deleteFromCart() {
-	var data = {
-		"pid" : $(this).closest(".productItemInBasket").attr("id")
-	};
-
-	$.ajax({
-		type : "DELETE",
-		url : "/deleteItemFromBasket",
-		data : data
-	}).done(function(data) {
-		var basketData = JSON.parse(data);
-		updateCart(basketData);
-	}).fail(function() {
-		alert("Fail to delete from Basket");
-	});
-}
-
-function loadBasket() {
+function login() {
 	$.ajax({
 		type : "GET",
-		url : "/loadBasket"
+		url : "/login"
 	}).done(function(data) {
-		$.ajax({
-			type : "POST",
-			url : "/setBasket"
-		}).done(function(data) {
-			$("#basket").append("<div id='basketHeader'><span>" + data.basket_id + "</span></div>");
-			$("#basket").append("<div id='basketItems'></div>");
-			$("#basket").append("<div id='basketTotal'>" + data.order_total + "</div>");
-		}).fail(function() {
-			alert("Fail to set Basket");
-		});
+		token = data;
 	}).fail(function() {
-		alert("Fail to load Basket");
+		alert("Fail to login");
 	});
-}
-
-function updateCart(basketData) {
-	$("#basketItems").html("");
-	if (basketData.product_items) {
-		for (var i = 0; i < basketData.product_items.length; i++) {
-			$("#basketItems").append("<div class='productItemInBasket' id='" + basketData.product_items[i].item_id + "'><span>Product Name: " + basketData.product_items[i].product_name + "</span><br/><span>Product Price: " + basketData.product_items[i].price + "</span><br/><button class='deleteItemFromBasket'>Delete</button><div>");
-		}
-	}
-	$(".deleteItemFromBasket").off('click').on('click', deleteFromCart);
-	$("#basketTotal").html(basketData.order_total);
-	if (basketData.order_total > 0) {
-		renderPayPalBtn(basketData);
-	}
-	else {
-		$("#paypal-button-container").remove();
-	}
 }
 
 $("#getProduct").on("click", function(e){
 	var data = {
-		"query" : $("#query").val()
+		"query" : $("#query").val(),
+		"token" : token
 	};
 
 	$.ajax({
@@ -101,6 +45,117 @@ $("#getProduct").on("click", function(e){
 	});
 });
 
+function addToCart() {
+	var data = {
+		"pid" : $(this).closest(".productContent").attr("id"),
+		"qty" : $(this).siblings(".productsQty").val(),
+		"token" : token,
+	};
+
+	if (!basket_id) {
+		getBasket(function() {
+			console.log(basket_id);
+			addProductToCart(data);
+		});
+	}
+	else {
+		addProductToCart(data);
+	}
+}
+
+function getBasket(basketLoaded) {
+	data = {
+		"token": token
+	};
+
+	$.ajax({
+		type : "GET",
+		url : "/getBasket",
+		data : data
+	}).done(function(data) {
+		ifmatch = data.headers.etag;
+		var basketData = JSON.parse(data.body);
+		basket_id = basketData.basket_id;
+		$("#basket").append("<div id='basketHeader'><span>" + basketData.basket_id + "</span></div>");
+		$("#basket").append("<div id='basketItems'></div>");
+		$("#basket").append("<div id='basketTotal'>" + basketData.order_total + "</div>");
+
+		data = {
+			"token": token,
+			"ifmatch": ifmatch,
+			"basket_id": basket_id
+		};
+		$.ajax({
+			type : "POST",
+			url : "/setBasket",
+			data : data
+		}).done(function(data) {
+			ifmatch = data.headers.etag;
+			basketLoaded();
+		}).fail(function() {
+			alert("Fail to set Basket");
+		});
+	}).fail(function() {
+		alert("Fail to get Basket");
+	});
+}
+
+function addProductToCart(data) {
+	data.ifmatch = ifmatch;
+	data.basket_id = basket_id;
+
+	$.ajax({
+		type : "POST",
+		url : "/addItemToBasket",
+		data : data
+	}).done(function(data) {
+		ifmatch = data.headers.etag;
+		var basketData = JSON.parse(data.body);
+		updateCart(basketData);
+		console.log(basketData);
+	}).fail(function() {
+		alert("Fail to add product");
+	});
+}
+
+function deleteFromCart() {
+	var data = {
+		"pid" : $(this).closest(".productItemInBasket").attr("id"),
+		"token" : token,
+		"ifmatch" : ifmatch,
+		"basket_id" : basket_id
+	};
+
+	$.ajax({
+		type : "DELETE",
+		url : "/deleteItemFromBasket",
+		data : data
+	}).done(function(data) {
+		ifmatch = data.headers.etag;
+		var basketData = JSON.parse(data.body);
+		updateCart(basketData);
+	}).fail(function() {
+		alert("Fail to delete from Basket");
+	});
+}
+
+function updateCart(basketData) {
+	$("#basketItems").html("");
+	if (basketData.product_items) {
+		for (var i = 0; i < basketData.product_items.length; i++) {
+			$("#basketItems").append("<div class='productItemInBasket' id='" + basketData.product_items[i].item_id + "'><span>Product Name: " + basketData.product_items[i].product_name + "</span><br/><span>Product Price: " + basketData.product_items[i].price + "</span><br/><button class='deleteItemFromBasket'>Delete</button><div>");
+		}
+	}
+	$(".deleteItemFromBasket").off('click').on('click', deleteFromCart);
+	$("#basketTotal").html(basketData.order_total);
+	if (basketData.order_total > 0) {
+		renderPayPalBtn(basketData);
+	}
+	else {
+		$("#paypal-button-container").remove();
+	}
+}
+
 function renderPayPalBtn(basketData) {
 	$("#paypal-button-container").remove();
 	$("#basket").append("<div id='paypal-button-container'></div>");
@@ -112,6 +167,8 @@ function renderPayPalBtn(basketData) {
             sandbox:    'ASEShkolv8BsV0ONvzkvd1krpnf_83RFgxsdeCcF-uZYGvipVqPEd6sYZBqXzoD5Y2qbekaCY14i-jAL',
             production: 'XXX'
         },
+
+        commit: true,
 
         payment: function() {
             var env = this.props.env;
@@ -144,19 +201,22 @@ function renderPayPalBtn(basketData) {
         onAuthorize: function(data, actions) {
     		return actions.payment.execute().then(function() {
         		data = {
-        			"amount" : basketData.order_total
+        			"amount" : basketData.order_total,
+        			"token" : token,
+					"ifmatch" : ifmatch,
+					"basket_id" : basket_id
         		}
         		$.ajax({
 					type : "POST",
 					url : "/placeOrder",
 					data : data
 				}).done(function(data) {
-					var orderData = JSON.parse(data);
+					var orderData = JSON.parse(data.body);
 					console.log(orderData);
 					$("#basket").html("");
 					alert("Thank you for purchase! Please come back, we always waiting for you!");
 				}).fail(function() {
-					alert("Fail to get Product");
+					alert("Fail to place order");
 				});
             });
         },
