@@ -1,3 +1,5 @@
+var requestor = Requestor.getRequestor();
+
 (function () {
 	login();
 })();
@@ -7,27 +9,13 @@ var basket_id = null;
 var ifmatch = null;
 
 function login() {
-	$.ajax({
-		type : "GET",
-		url : "/login"
-	}).done(function(data) {
-		token = data;
-	}).fail(function() {
-		alert("Fail to login");
+	requestor.makeRequest("GET", "/login", function(data) {
+		console.log("Logged In");
 	});
 }
 
 $("#getProduct").on("click", function(e){
-	var data = {
-		"query" : $("#query").val(),
-		"token" : token
-	};
-
-	$.ajax({
-		type : "GET",
-		url : "/getProduct",
-		data : data
-	}).done(function(data) {
+	requestor.makeRequest("GET", "/getProduct", function(data) {
 		for (var i = 0; i < data.length; i++) {
 			$("#productInfo").append("<div class='productContent' id='" + data[i].id + "'></div>");
 			$(".productContent:last").append("<span>Product Name: " + data[i].name + "</span><br/>");
@@ -40,21 +28,17 @@ $("#getProduct").on("click", function(e){
 			$(".productContent:last").append(" <button class='addToCart'>Add to Cart</button>");
 			$(".addToCart:last").off('click').on('click', addToCart);
 		}
-	}).fail(function() {
-		alert("Fail to get Product");
-	});
+	}, { "query" : $("#query").val() });
 });
 
 function addToCart() {
 	var data = {
 		"pid" : $(this).closest(".productContent").attr("id"),
 		"qty" : $(this).siblings(".productsQty").val(),
-		"token" : token,
 	};
 
-	if (!basket_id) {
+	if (!requestor.getBasketID()) {
 		getBasket(function() {
-			console.log(basket_id);
 			addProductToCart(data);
 		});
 	}
@@ -64,79 +48,33 @@ function addToCart() {
 }
 
 function getBasket(basketLoaded) {
-	data = {
-		"token": token
-	};
-
-	$.ajax({
-		type : "GET",
-		url : "/getBasket",
-		data : data
-	}).done(function(data) {
-		ifmatch = data.headers.etag;
-		var basketData = JSON.parse(data.body);
-		basket_id = basketData.basket_id;
-		$("#basket").append("<div id='basketHeader'><span>" + basketData.basket_id + "</span></div>");
+	requestor.makeRequest("GET", "/getBasket", function(data) {
+		$("#basket").append("<div id='basketHeader'><span>" + requestor.getBasketID() + "</span></div>");
 		$("#basket").append("<div id='basketItems'></div>");
-		$("#basket").append("<div id='basketTotal'>" + basketData.order_total + "</div>");
+		$("#basket").append("<div id='basketTotal'>" + data.order_total + "</div>");
 
-		data = {
-			"token": token,
-			"ifmatch": ifmatch,
-			"basket_id": basket_id
-		};
-		$.ajax({
-			type : "POST",
-			url : "/setBasket",
-			data : data
-		}).done(function(data) {
-			ifmatch = data.headers.etag;
+		requestor.makeRequest("POST", "/setBasket", function(data) {
 			basketLoaded();
-		}).fail(function() {
-			alert("Fail to set Basket");
-		});
-	}).fail(function() {
-		alert("Fail to get Basket");
+		}, { "basket_id" : requestor.getBasketID()});
 	});
 }
 
 function addProductToCart(data) {
-	data.ifmatch = ifmatch;
-	data.basket_id = basket_id;
-
-	$.ajax({
-		type : "POST",
-		url : "/addItemToBasket",
-		data : data
-	}).done(function(data) {
-		ifmatch = data.headers.etag;
-		var basketData = JSON.parse(data.body);
-		updateCart(basketData);
-		console.log(basketData);
-	}).fail(function() {
-		alert("Fail to add product");
-	});
+	data.basket_id = requestor.getBasketID();
+	requestor.makeRequest("POST", "/addItemToBasket", function(data) {
+		updateCart(data);
+	}, data);
 }
 
 function deleteFromCart() {
 	var data = {
 		"pid" : $(this).closest(".productItemInBasket").attr("id"),
-		"token" : token,
-		"ifmatch" : ifmatch,
-		"basket_id" : basket_id
+		"basket_id" : requestor.getBasketID()
 	};
 
-	$.ajax({
-		type : "DELETE",
-		url : "/deleteItemFromBasket",
-		data : data
-	}).done(function(data) {
-		ifmatch = data.headers.etag;
-		var basketData = JSON.parse(data.body);
-		updateCart(basketData);
-	}).fail(function() {
-		alert("Fail to delete from Basket");
-	});
+	requestor.makeRequest("DELETE", "/deleteItemFromBasket", function(data) {
+		updateCart(data);
+	}, data);
 }
 
 function updateCart(basketData) {
@@ -160,14 +98,11 @@ function renderPayPalBtn(basketData) {
 	$("#paypal-button-container").remove();
 	$("#basket").append("<div id='paypal-button-container'></div>");
 	paypal.Button.render({
-	
         env: 'sandbox',
-
         client: {
             sandbox:    'ASEShkolv8BsV0ONvzkvd1krpnf_83RFgxsdeCcF-uZYGvipVqPEd6sYZBqXzoD5Y2qbekaCY14i-jAL',
             production: 'XXX'
         },
-
         commit: true,
 
         payment: function() {
@@ -200,24 +135,15 @@ function renderPayPalBtn(basketData) {
 
         onAuthorize: function(data, actions) {
     		return actions.payment.execute().then(function() {
-        		data = {
+        		var reqData = {
         			"amount" : basketData.order_total,
-        			"token" : token,
-					"ifmatch" : ifmatch,
-					"basket_id" : basket_id
+					"basket_id" : requestor.getBasketID()
         		}
-        		$.ajax({
-					type : "POST",
-					url : "/placeOrder",
-					data : data
-				}).done(function(data) {
-					var orderData = JSON.parse(data.body);
-					console.log(orderData);
+
+        		requestor.makeRequest("POST", "/placeOrder", function(data) {
 					$("#basket").html("");
 					alert("Thank you for purchase! Please come back, we always waiting for you!");
-				}).fail(function() {
-					alert("Fail to place order");
-				});
+				}, reqData);
             });
         },
 	}, '#paypal-button-container');

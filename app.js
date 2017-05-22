@@ -28,22 +28,19 @@ app.get('/login', function(req, res){
    		body: JSON.stringify({"type":"guest"})
     }, function (error, response, body) {
 		if (!error && response.statusCode == 200) {
-			res.end(response.headers.authorization);
+			res.json(response);
 		}
 	});
 });
 
 app.get('/getProduct', function(req, res) {
 	var query = req.query.query;
-	var token = req.query.token;
 
 	request.get({
         url: 'https://pulsarfour03-alliance-prtnr-eu05-dw.demandware.net/s/Sites-SiteGenesisRomaTasks-Site/dw/shop/v16_4/product_search?q=' + query + '*&expand=images,prices,variations',
-        headers: {
-        	"Authorization": token
-    	}
     }, function (error, response, body) {
 		if (!error && response.statusCode == 200) {
+			var token = response.headers.authorization;
 			var parsedBody = JSON.parse(body);
 			var masterIDs = [];
 			for (var i = 0; i < parsedBody.hits.length; i++) {
@@ -90,9 +87,6 @@ app.post('/addItemToBasket', function(req, res) {
     }, function (error, response, body) {
 		if (!error && response.statusCode == 200) {
 			res.json(response);
-		}
-		else if (response.statusCode > 200) {
-			console.log(response);
 		}
 	});
 });
