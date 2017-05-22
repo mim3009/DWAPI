@@ -1,4 +1,15 @@
 var Requestor = (function(){
+	var requestor;
+
+	return {
+        getRequestor: function() {
+			if (!requestor) {
+				requestor = new Requestor();
+			}
+			return requestor;
+		}
+	};
+
     function Requestor() {
 		var ifmatch = "";
 		var token = "";
@@ -45,13 +56,4 @@ var Requestor = (function(){
 			});
 		}
     }
-    var requestor;
-    return {
-        getRequestor: function() {
-			if (!requestor) {
-				requestor = new Requestor();
-			}
-			return requestor;
-		}
-   };
 })();

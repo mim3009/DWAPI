@@ -4,10 +4,6 @@ var requestor = Requestor.getRequestor();
 	login();
 })();
 
-var token = null;
-var basket_id = null;
-var ifmatch = null;
-
 function login() {
 	requestor.makeRequest("GET", "/login", function(data) {
 		console.log("Logged In");
@@ -67,14 +63,9 @@ function addProductToCart(data) {
 }
 
 function deleteFromCart() {
-	var data = {
-		"pid" : $(this).closest(".productItemInBasket").attr("id"),
-		"basket_id" : requestor.getBasketID()
-	};
-
 	requestor.makeRequest("DELETE", "/deleteItemFromBasket", function(data) {
 		updateCart(data);
-	}, data);
+	}, { "pid" : $(this).closest(".productItemInBasket").attr("id"), "basket_id" : requestor.getBasketID() });
 }
 
 function updateCart(basketData) {
@@ -135,15 +126,10 @@ function renderPayPalBtn(basketData) {
 
         onAuthorize: function(data, actions) {
     		return actions.payment.execute().then(function() {
-        		var reqData = {
-        			"amount" : basketData.order_total,
-					"basket_id" : requestor.getBasketID()
-        		}
-
         		requestor.makeRequest("POST", "/placeOrder", function(data) {
 					$("#basket").html("");
 					alert("Thank you for purchase! Please come back, we always waiting for you!");
-				}, reqData);
+				}, { "amount" : basketData.order_total, "basket_id" : requestor.getBasketID() });
             });
         },
 	}, '#paypal-button-container');
